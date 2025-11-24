@@ -53,41 +53,57 @@ jobs:
           echo "BUILD_TOOL_VERSION=$BUILD_TOOL_VERSION" >> $GITHUB_ENV
           echo Last build tool version is: $BUILD_TOOL_VERSION
 
-      # 7️⃣ 签名 Release APK（仅在有 SIGNING_KEY 时）
+      # 7️⃣ 设置 secrets 到 env（fork 测试可不设置，release 时在 fork 仓库添加）
+      - name: Set Signing Secrets
+        if: ${{ github.repository_owner == github.actor }}
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: echo "Signing secrets loaded"
+
+      # 8️⃣ 签名 Release APK（仅当 env.SIGNING_KEY 存在时）
       - name: Sign Release APK
-        if: ${{ secrets.SIGNING_KEY != '' }}
+        if: ${{ env.SIGNING_KEY != '' }}
         uses: kevin-david/zipalign-sign-android-release@v2
         id: sign_app
         with:
           releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          signingKeyBase64: ${{ env.SIGNING_KEY }}
+          alias: ${{ env.ALIAS }}
+          keyStorePassword: ${{ env.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ env.KEY_PASSWORD }}
 
-      # 8️⃣ 查看签名生成的文件
+      # 9️⃣ 查看签名生成的文件
       - name: Check signed APK
-        if: ${{ secrets.SIGNING_KEY != '' }}
+        if: ${{ env.SIGNING_KEY != '' }}
         run: |
           echo "Signed APK: ${{ steps.sign_app.outputs.signedReleaseFile }}"
           ls -lh app/build/outputs/apk/release
 
-      # 9️⃣ 上传 Debug APK（未签名）和 Release APK（签名优先）
-      - name: Upload all APKs
+      # 🔟 上传 Debug APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: HyperPods-APKs
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            ${{ steps.sign_app.outputs.signedReleaseFile || 'app/build/outputs/apk/release/*.apk' }}
+          name: HyperPods-Debug
+          path: app/build/outputs/apk/debug/*.apk
 
-      # 🔟 Release APK（仅在 tag 且有 SIGNING_KEY 时）
+      # 1️⃣1️⃣ 上传 Release APK（签名优先）
+      - name: Upload Release APK
+        if: ${{ env.SIGNING_KEY != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HyperPods-Release
+          path: app/build/outputs/apk/release/*.apk
+
+      # 1️⃣2️⃣ Release APK 到 GitHub Release（仅在 tag 且有 SIGNING_KEY）
       - name: Release APK
-        if: ${{ secrets.SIGNING_KEY != '' && github.ref_type == 'tag' }}
+        if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' }}
         uses: ncipollo/release-action@v1
         with:
           token: ${{ github.token }}
-          artifacts: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          artifacts: app/build/outputs/apk/release/*.apk
           generateReleaseNotes: true
           makeLatest: true
           replacesArtifacts: true
