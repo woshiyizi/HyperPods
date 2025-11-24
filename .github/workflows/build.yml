@@ -2,10 +2,10 @@ name: Build HyperPods
 
 on:
   push:
-    tags: ["*"]
-    branches: ["main", "aap"]
+    tags: [ "*" ]
+    branches: [ "main", "aap" ]
   pull_request:
-    branches: ["main", "aap"]
+    branches: [ "main", "aap" ]
 
 jobs:
   build:
@@ -13,39 +13,30 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 1️⃣ Checkout 代码
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      # 2️⃣ 设置 Java
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
-
-      # 3️⃣ 设置 Gradle
+  
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
         with:
           gradle-home-cache-cleanup: true
 
-      # 4️⃣ 构建 Debug 和 Release APK
-      - name: Build APKs with Gradle
+      - name: Build with Gradle
         run: |
           echo 'org.gradle.parallel=true' >> gradle.properties
           echo 'org.gradle.vfs.watch=true' >> gradle.properties
           echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
           sed -i 's/org.gradle.configuration-cache=true//g' gradle.properties
-          ./gradlew assembleDebug assembleRelease
+          ./gradlew assembleRelease
 
-      # 5️⃣ 查看生成的 APK
-      - name: List APK files
-        run: ls -lh app/build/outputs/apk/debug app/build/outputs/apk/release
-
-      # 6️⃣ 获取最新 Build Tools 版本
       - name: Get Build Tool Version
         shell: bash
         run: |
@@ -53,57 +44,39 @@ jobs:
           echo "BUILD_TOOL_VERSION=$BUILD_TOOL_VERSION" >> $GITHUB_ENV
           echo Last build tool version is: $BUILD_TOOL_VERSION
 
-      # 7️⃣ 设置 secrets 到 env（fork 测试可不设置，release 时在 fork 仓库添加）
-      - name: Set Signing Secrets
-        if: ${{ github.repository_owner == github.actor }}
-        env:
+      - name: Sign Release
+        env: 
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          ALIAS: ${{ secrets.ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: echo "Signing secrets loaded"
-
-      # 8️⃣ 签名 Release APK（仅当 env.SIGNING_KEY 存在时）
-      - name: Sign Release APK
+          BUILD_TOOLS_VERSION: ${{ env.BUILD_TOOL_VERSION }}
         if: ${{ env.SIGNING_KEY != '' }}
+        continue-on-error: true
         uses: kevin-david/zipalign-sign-android-release@v2
         id: sign_app
         with:
           releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ env.SIGNING_KEY }}
-          alias: ${{ env.ALIAS }}
-          keyStorePassword: ${{ env.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ env.KEY_PASSWORD }}
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-      # 9️⃣ 查看签名生成的文件
-      - name: Check signed APK
-        if: ${{ env.SIGNING_KEY != '' }}
-        run: |
-          echo "Signed APK: ${{ steps.sign_app.outputs.signedReleaseFile }}"
-          ls -lh app/build/outputs/apk/release
-
-      # 🔟 上传 Debug APK
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: HyperPods-Debug
-          path: app/build/outputs/apk/debug/*.apk
-
-      # 1️⃣1️⃣ 上传 Release APK（签名优先）
-      - name: Upload Release APK
+      - name: Upload build artifact
+        env: 
+           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         if: ${{ env.SIGNING_KEY != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: HyperPods-Release
-          path: app/build/outputs/apk/release/*.apk
+          name: HyperPods
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}
 
-      # 1️⃣2️⃣ Release APK 到 GitHub Release（仅在 tag 且有 SIGNING_KEY）
-      - name: Release APK
+      - name: Release apk
+        env: 
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' }}
+        continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
           token: ${{ github.token }}
-          artifacts: app/build/outputs/apk/release/*.apk
+          artifacts: ${{steps.sign_app.outputs.signedReleaseFile}}
           generateReleaseNotes: true
           makeLatest: true
           replacesArtifacts: true
