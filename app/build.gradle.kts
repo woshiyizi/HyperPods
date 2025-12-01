@@ -117,4 +117,7 @@ dependencies {
     implementation(compose.preview)
     debugImplementation(compose.uiTooling)
     implementation(libs.haze)
+    implementation(libs.hyperfocusapi)
+    implementation(libs.gaze.capsule)
+    implementation("org.jetbrains.kotlin:kotlin-reflect:${libs.versions.kotlin.get()}")
 }

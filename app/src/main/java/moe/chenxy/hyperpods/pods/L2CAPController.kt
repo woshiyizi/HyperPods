@@ -26,17 +26,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import moe.chenxy.hyperpods.BuildConfig
+import moe.chenxy.hyperpods.utils.AACPManager
+import moe.chenxy.hyperpods.utils.AirPodsInstance
 import moe.chenxy.hyperpods.utils.MediaControl
 import moe.chenxy.hyperpods.utils.SystemApisUtils
 import moe.chenxy.hyperpods.utils.SystemApisUtils.setIconVisibility
 import moe.chenxy.hyperpods.utils.miuiStrongToast.MiuiStrongToastUtil
 import moe.chenxy.hyperpods.utils.miuiStrongToast.MiuiStrongToastUtil.cancelPodsNotificationByMiuiBt
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.BatteryParams
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.EarDetectionParams
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.HyperPodsAction
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.HyperPodsPrefsKey
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.PodParams
+import moe.chenxy.hyperpods.utils.data.BatteryParams
+import moe.chenxy.hyperpods.utils.data.EarDetectionParams
+import moe.chenxy.hyperpods.utils.data.HyperPodsAction
+import moe.chenxy.hyperpods.utils.data.HyperPodsPrefsKey
+import moe.chenxy.hyperpods.utils.data.PodBatteryParams
 import java.util.concurrent.Executor
+import kotlin.collections.get
+import kotlin.experimental.or
+import kotlin.reflect.full.memberProperties
 
 @SuppressLint("MissingPermission", "StaticFieldLeak")
 object L2CAPController {
@@ -51,6 +56,10 @@ object L2CAPController {
     }
     private lateinit var mPrefsBridge: YukiHookPrefsBridge
 
+    private var aacpManager: AACPManager? = null
+
+//    private lateinit var mAirPodsInstance: AirPodsInstance
+
     private var scanToken: ScanToken? = null
     var routes: List<MediaRoute2Info> = listOf()
 
@@ -59,12 +68,13 @@ object L2CAPController {
     // Status
     private var mShowedConnectedToast = false
     private var lastCaseConnected = false
-    private var disconnectedAudio = false
+    private var disconnectedAudio = true /* default to true to connect audio first time always */
     private var pausedAudio = false
     private var lastTempBatt = 0
     lateinit var currentEarDetectionParams: EarDetectionParams
     lateinit var currentBatteryParams: BatteryParams
     private var currentAnc: Int = 1
+    lateinit var currentPodsInfo: AACPManager.Companion.AirPodsInformation
 
     // Function toggle
     private var earDetection = true
@@ -87,7 +97,7 @@ object L2CAPController {
     }
 
     private fun changeUIAncStatus(status: Int) {
-        if (status < 1 || status > 4) {
+        if (status !in 1..4) {
             // ignore invalid param
             return
         }
@@ -95,7 +105,7 @@ object L2CAPController {
             this.putExtra("status", status)
             this.`package` = BuildConfig.APPLICATION_ID
             this.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-            mContext!!.sendBroadcast(this)
+            mContext?.sendBroadcast(this)
         }
     }
 
@@ -104,7 +114,7 @@ object L2CAPController {
             this.putExtra("status", status)
             this.`package` = BuildConfig.APPLICATION_ID
             this.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-            mContext!!.sendBroadcast(this)
+            mContext?.sendBroadcast(this)
         }
     }
 
@@ -113,7 +123,7 @@ object L2CAPController {
             this.putExtra("status", status)
             this.`package` = BuildConfig.APPLICATION_ID
             this.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-            mContext!!.sendBroadcast(this)
+            mContext?.sendBroadcast(this)
         }
     }
 
@@ -130,8 +140,10 @@ object L2CAPController {
 
                 changeUIAncStatus(currentAnc)
                 Intent(HyperPodsAction.ACTION_PODS_CONNECTED).apply {
+                    if (this@L2CAPController::currentPodsInfo.isInitialized)
+                        this.putExtra("device_info", currentPodsInfo)
                     this.putExtra("device_name", mDevice.name)
-                    mContext!!.sendBroadcast(this)
+                    mContext?.sendBroadcast(this)
                 }
             }
             HyperPodsAction.ACTION_ANC_SELECT -> {
@@ -142,6 +154,9 @@ object L2CAPController {
             HyperPodsAction.ACTION_EAR_DETECTION_SWITCH_CHANGED -> {
                 earDetection = intent.getBooleanExtra("ear_detection", true)
                 disconnectAudio = intent.getBooleanExtra("disconnect_audio", true)
+            }
+            HyperPodsAction.ACTION_PODS_SETTINGS_CHANGED -> {
+                intent.getStringExtra("key")?.let { handleUISettingsChanged(it) }
             }
         }
     }
@@ -199,19 +214,19 @@ object L2CAPController {
     @OptIn(ExperimentalStdlibApi::class)
     fun handleBatteryChanged(packet: ByteArray) {
         val batteries = AirPodsNotifications.BatteryNotification.getBattery()
-        val left = PodParams(
+        val left = PodBatteryParams(
             batteries[0].level,
             batteries[0].status == BatteryStatus.CHARGING,
             batteries[0].status != BatteryStatus.DISCONNECTED,
             batteries[0].status
         )
-        val right = PodParams(
+        val right = PodBatteryParams(
             batteries[1].level,
             batteries[1].status == BatteryStatus.CHARGING,
             batteries[1].status != BatteryStatus.DISCONNECTED,
             batteries[1].status
         )
-        val case = PodParams(
+        val case = PodBatteryParams(
             batteries[2].level,
             batteries[2].status == BatteryStatus.CHARGING,
             batteries[2].status != BatteryStatus.DISCONNECTED,
@@ -239,11 +254,11 @@ object L2CAPController {
 
         // allow show toast again when case status from disconnected to active, it means pods put in the case again
         if (shouldShowToast) {
-            MiuiStrongToastUtil.showPodsBatteryToastByMiuiBt(mContext!!, batteryParams)
+            MiuiStrongToastUtil.showPodsBatteryToastByMiuiBt(mContext, batteryParams)
             mShowedConnectedToast = true
         }
         lastCaseConnected = case.isConnected
-        MiuiStrongToastUtil.showPodsNotificationByMiuiBt(mContext!!, batteryParams, mDevice)
+        MiuiStrongToastUtil.showPodsNotificationByMiuiBt(mContext, batteryParams, mDevice)
         changeUIBatteryStatus(batteryParams)
 
         lastTempBatt = if (left.isConnected && right.isConnected)
@@ -255,6 +270,85 @@ object L2CAPController {
             else SystemApisUtils.BATTERY_LEVEL_UNKNOWN
 
         setRegularBatteryLevel(lastTempBatt)
+    }
+
+    fun initAllCustomSettings() {
+        val values = HyperPodsPrefsKey::class.memberProperties
+            .filter { it.returnType.classifier == String::class }
+            .map { it.getter.call(HyperPodsPrefsKey) as String }
+        for (key in values) {
+            handleUISettingsChanged(key)
+        }
+    }
+
+    fun getIdentifierValue(identifier: AACPManager.Companion.ControlCommandIdentifiers): Byte? {
+        return aacpManager?.controlCommandStatusList?.find {
+            it.identifier == identifier
+        }?.value?.takeIf { it.isNotEmpty() }?.get(0)
+    }
+
+    fun handleUISettingsChanged(key: String) {
+        when (key) {
+            HyperPodsPrefsKey.PERSONLIZED_VOLUME -> {
+                val checked = mPrefsBridge.getBoolean(key, true)
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.ADAPTIVE_VOLUME_CONFIG.value, value = checked)
+            }
+//            HyperPodsPrefsKey.CASE_CHARGING_SOUND -> {
+////                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.CH.value, value = checked)
+//                setCaseChargingSounds(mPrefsBridge.getBoolean(key, true))
+//            }
+            HyperPodsPrefsKey.ADAPTIVE_AUDIO_LEVEL -> {
+                val value = mPrefsBridge.getFloat(key, 0.5f)
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.AUTO_ANC_STRENGTH.value, value = (100 - value * 100).toInt())
+            }
+            HyperPodsPrefsKey.CONVERSATION_AWARENESS -> {
+                val checked = mPrefsBridge.getBoolean(key, true)
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.CONVERSATION_DETECT_CONFIG.value, value = checked)
+            }
+            HyperPodsPrefsKey.LOUD_SOUND_REDUCTION -> {
+                val checked = mPrefsBridge.getBoolean(key, true)
+                // TODO: porting ATTManager from LibrePod
+                setLoudSoundReduction(checked)
+            }
+            HyperPodsPrefsKey.ADJUST_VOLUME_BY_SWIPER -> {
+                val checked = mPrefsBridge.getBoolean(key, true)
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.VOLUME_SWIPE_MODE.value, value = checked)
+            }
+            HyperPodsPrefsKey.LISTENING_MODE_BYTE -> {
+                val value = mPrefsBridge.getInt(key, AACPManager.Companion.ListeningMode.NC.value.toInt() or AACPManager.Companion.ListeningMode.TRANSPARENCY.value.toInt())
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.LISTENING_MODE_CONFIGS.value, value = value.toByte())
+            }
+            HyperPodsPrefsKey.LONG_PRESS_MODE_LEFT -> {
+                // TODO: Implement launch Xiaoai & enable custom hold action
+            }
+            HyperPodsPrefsKey.LONG_PRESS_MODE_RIGHT -> {
+                // TODO: Implement launch Xiaoai & enable custom hold action
+            }
+
+            HyperPodsPrefsKey.EAR_DETECTION -> {
+                earDetection = mPrefsBridge.getBoolean(key, true)
+            }
+
+            HyperPodsPrefsKey.EAR_DETECTION_SWITCH_SPEAKER -> {
+                disconnectAudio = mPrefsBridge.getBoolean(key, true)
+            }
+
+            HyperPodsPrefsKey.SINGLE_POD_ANC -> {
+                val checked = mPrefsBridge.getBoolean(key, true)
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.ONE_BUD_ANC_MODE.value, value = checked)
+            }
+
+            HyperPodsPrefsKey.MICROPHONE_MODE -> {
+                val value = mPrefsBridge.getInt(key, 0)
+                val byteValue = when (value) {
+                    0 -> 0x00
+                    2 -> 0x01
+                    1 -> 0x02
+                    else -> 0x00
+                }
+                aacpManager?.sendControlCommand(identifier = AACPManager.Companion.ControlCommandIdentifiers.MIC_MODE.value, value = byteValue)
+            }
+        }
     }
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -308,6 +402,82 @@ object L2CAPController {
     private fun stopRoutesScan() {
         scanToken?.let { mediaRouter.cancelScanRequest(it) }
         mediaRouter.unregisterRouteCallback(routeCallback)
+        scanToken = null
+    }
+
+    private val packetCallback = object : AACPManager.PacketCallback {
+        override fun onBatteryInfoReceived(batteryInfo: ByteArray) {
+            AirPodsNotifications.BatteryNotification.setBattery(batteryInfo)
+            handleBatteryChanged(batteryInfo)
+        }
+
+        override fun onEarDetectionReceived(earDetection: ByteArray) {
+            AirPodsNotifications.EarDetection.setStatus(earDetection)
+            handleInEarStatusChanged(AirPodsNotifications.EarDetection.status)
+        }
+
+        override fun onConversationAwarenessReceived(conversationAwareness: ByteArray) {
+            AirPodsNotifications.ConversationalAwarenessNotification.setData(conversationAwareness)
+            Log.i(TAG, "Conversation Awareness: ${AirPodsNotifications.ConversationalAwarenessNotification.status}")
+        }
+
+        override fun onControlCommandReceived(controlCommand: ByteArray) {
+            val command = AACPManager.ControlCommand.fromByteArray(controlCommand)
+            if (command.identifier == AACPManager.Companion.ControlCommandIdentifiers.LISTENING_MODE.value) {
+                AirPodsNotifications.ANC.setStatus(byteArrayOf(command.value.takeIf { it.isNotEmpty() }?.get(0) ?: 0x00.toByte()))
+                currentAnc = AirPodsNotifications.ANC.status
+                changeUIAncStatus(currentAnc)
+            }
+        }
+
+        override fun onDeviceInformationReceived(deviceInformation: AACPManager.Companion.AirPodsInformation) {
+            Log.i(TAG, "Device Information: $deviceInformation")
+            currentPodsInfo = deviceInformation
+            Intent(HyperPodsAction.ACTION_PODS_CONNECTED).apply {
+                this.putExtra("device_info", deviceInformation)
+                this.putExtra("device_name", mDevice.name)
+                mContext?.sendBroadcast(this)
+            }
+        }
+
+        override fun onHeadTrackingReceived(headTracking: ByteArray) {
+//            TODO("Not yet implemented")
+        }
+
+        override fun onUnknownPacketReceived(packet: ByteArray) {
+
+        }
+
+        override fun onProximityKeysReceived(proximityKeys: ByteArray) {
+//            TODO("Not yet implemented")
+        }
+
+        override fun onStemPressReceived(stemPress: ByteArray) {
+
+        }
+
+        override fun onAudioSourceReceived(audioSource: ByteArray) {
+//            TODO("Not yet implemented")
+        }
+
+        override fun onOwnershipChangeReceived(owns: Boolean) {
+//            TODO("Not yet implemented")
+        }
+
+        override fun onConnectedDevicesReceived(connectedDevices: List<AACPManager.Companion.ConnectedDevice>) {
+//            TODO("Not yet implemented")
+        }
+
+        override fun onOwnershipToFalseRequest(
+            sender: String,
+            reasonReverseTapped: Boolean
+        ) {
+//            TODO("Not yet implemented")
+        }
+
+        override fun onShowNearbyUI(sender: String) {
+
+        }
     }
 
     fun connectPod(context: Context, device: BluetoothDevice, prefsBridge: YukiHookPrefsBridge) {
@@ -322,12 +492,8 @@ object L2CAPController {
             this.addAction(HyperPodsAction.ACTION_PODS_UI_INIT)
             this.addAction(HyperPodsAction.ACTION_EAR_DETECTION_SWITCH_CHANGED)
             this.addAction(HyperPodsAction.ACTION_GET_PODS_MAC)
+            this.addAction(HyperPodsAction.ACTION_PODS_SETTINGS_CHANGED)
         }, Context.RECEIVER_EXPORTED)
-
-        Intent(HyperPodsAction.ACTION_PODS_CONNECTED).apply {
-            this.putExtra("device_name", device.name)
-            context.sendBroadcast(this)
-        }
 
         MediaControl.mContext = mContext
         mediaRouter = MediaRouter2.getInstance(mContext!!)
@@ -352,17 +518,25 @@ object L2CAPController {
             socket = getBtSocket()
 
             Log.d(TAG, "connecting AirPods!")
-            socket.connect()
+            try {
+                socket.connect()
+            } catch (e: Exception) {
+                Log.e(TAG, "failed to connect to socket, retry!", e)
+                connectPod(context, mDevice, mPrefsBridge)
+
+                return@launch
+            }
+
 
             Log.d(TAG, "connected!")
-            socket.outputStream.write(Enums.HANDSHAKE.value)
-            socket.outputStream.flush()
+            aacpManager = AACPManager(socket)
+            aacpManager!!.setPacketCallback(packetCallback)
+            aacpManager!!.sendDataPacket(aacpManager!!.createHandshakePacket())
+            aacpManager!!.sendPacket(aacpManager!!.createHandshakePacket())
             delay(200)
-            socket.outputStream.write(Enums.SET_SPECIFIC_FEATURES.value)
-            socket.outputStream.flush()
+            aacpManager!!.sendSetFeatureFlagsPacket()
             delay(200)
-            socket.outputStream.write(Enums.REQUEST_NOTIFICATIONS.value)
-            socket.outputStream.flush()
+            aacpManager!!.sendNotificationRequest()
             delay(200)
             while (socket.isConnected) {
                 val buffer = ByteArray(1024)
@@ -371,7 +545,8 @@ object L2CAPController {
                     Log.v(TAG, "bytesRead $bytesRead!")
                 }
                 if (bytesRead > 0) {
-                    handleAirPodsPacket(buffer.copyOfRange(0, bytesRead))
+                    aacpManager!!.receivePacket(buffer.copyOfRange(0, bytesRead))
+//                    handleAirPodsPacket(buffer.copyOfRange(0, bytesRead))
                 } else if (bytesRead == -1) {
                     // disconnected
                     socket.close()
@@ -396,9 +571,10 @@ object L2CAPController {
 
         mShowedConnectedToast = false
         pausedAudio = false
-        disconnectedAudio = false
+//        disconnectedAudio = false
         mContext = null
         MediaControl.mContext = null
+        aacpManager = null
     }
 
     fun sendPacket(packet: String) {
@@ -407,85 +583,22 @@ object L2CAPController {
         socket.outputStream?.flush()
     }
 
+    fun sendPacket(packet: ByteArray) {
+        if (this::socket.isInitialized && socket.isConnected && socket.outputStream != null) {
+            socket.outputStream?.write(packet)
+            socket.outputStream?.flush()
+        }
+    }
+
     fun setANCMode(mode: Int) {
         Log.d(TAG, "setANCMode: $mode")
 
-        // Set Off listening mode for AirPods Pro 2 to enable OFF mode
-        setOffListeningMode(mode == 1)
-
-        when (mode) {
-            1 -> {
-                socket.outputStream?.write(Enums.NOISE_CANCELLATION_OFF.value)
-            }
-            2 -> {
-                socket.outputStream?.write(Enums.NOISE_CANCELLATION_ON.value)
-            }
-            3 -> {
-                socket.outputStream?.write(Enums.NOISE_CANCELLATION_TRANSPARENCY.value)
-            }
-            4 -> {
-                socket.outputStream?.write(Enums.NOISE_CANCELLATION_ADAPTIVE.value)
-            }
+        if (mode in 1..4) {
+            aacpManager?.sendControlCommand(
+                AACPManager.Companion.ControlCommandIdentifiers.LISTENING_MODE.value,
+                mode
+            )
         }
-        socket.outputStream?.flush()
-    }
-
-    fun setCAEnabled(enabled: Boolean) {
-        socket.outputStream?.write(if (enabled) Enums.SET_CONVERSATION_AWARENESS_ON.value else Enums.SET_CONVERSATION_AWARENESS_OFF.value)
-        socket.outputStream?.flush()
-    }
-
-    fun setOffListeningMode(enabled: Boolean) {
-        socket.outputStream?.write(byteArrayOf(0x04, 0x00 ,0x04, 0x00, 0x09, 0x00, 0x34, if (enabled) 0x01 else 0x02, 0x00, 0x00, 0x00))
-        socket.outputStream?.flush()
-    }
-
-    fun setAdaptiveStrength(strength: Int) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x2E, strength.toByte(), 0x00, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setPressSpeed(speed: Int) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x17, speed.toByte(), 0x00, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setPressAndHoldDuration(speed: Int) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x18, speed.toByte(), 0x00, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setNoiseCancellationWithOnePod(enabled: Boolean) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x1B, if (enabled) 0x01 else 0x02, 0x00, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setVolumeControl(enabled: Boolean) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x25, if (enabled) 0x01 else 0x02, 0x00, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setVolumeSwipeSpeed(speed: Int) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x23, speed.toByte(), 0x00, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setToneVolume(volume: Int) {
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x1F, volume.toByte(), 0x50, 0x00, 0x00)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
-    fun setCaseChargingSounds(enabled: Boolean) {
-        val bytes = byteArrayOf(0x12, 0x3a, 0x00, 0x01, 0x00, 0x08, if (enabled) 0x00 else 0x01)
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
     }
 
     fun disconnectAudio(context: Context, device: BluetoothDevice?) {
@@ -561,32 +674,10 @@ object L2CAPController {
         setRegularBatteryLevel(lastTempBatt)
     }
 
-    fun setName(name: String) {
-        val nameBytes = name.toByteArray()
-        val bytes = byteArrayOf(0x04, 0x00, 0x04, 0x00, 0x1a, 0x00, 0x01,
-            nameBytes.size.toByte(), 0x00) + nameBytes
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-        val hex = bytes.joinToString(" ") { "%02X".format(it) }
-        Log.d("AirPodsService", "setName: $name, sent packet: $hex")
-    }
-
-    fun setPVEnabled(enabled: Boolean) {
-        var hex = "04 00 04 00 09 00 26 ${if (enabled) "01" else "02"} 00 00 00"
-        var bytes = hex.split(" ").map { it.toInt(16).toByte() }.toByteArray()
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-        hex = "04 00 04 00 17 00 00 00 10 00 12 00 08 E${if (enabled) "6" else "5"} 05 10 02 42 0B 08 50 10 02 1A 05 02 ${if (enabled) "32" else "00"} 00 00 00"
-        bytes = hex.split(" ").map { it.toInt(16).toByte() }.toByteArray()
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
-    }
-
     fun setLoudSoundReduction(enabled: Boolean) {
         val hex = "52 1B 00 0${if (enabled) "1" else "0"}"
         val bytes = hex.split(" ").map { it.toInt(16).toByte() }.toByteArray()
-        socket.outputStream?.write(bytes)
-        socket.outputStream?.flush()
+        sendPacket(bytes)
     }
 
     fun setRegularBatteryLevel(level: Int) {

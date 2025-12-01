@@ -1,6 +1,6 @@
 package moe.chenxy.hyperpods.utils.miuiStrongToast
 
-import StringToastBundle
+import DeviceNotificationBundle
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.content.Context
@@ -19,16 +19,21 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import moe.chenxy.hyperpods.BuildConfig
 import moe.chenxy.hyperpods.utils.SystemApisUtils.isHyperOS
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.BatteryParams
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.IconParams
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.Left
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.Right
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.StringToastBean
-import moe.chenxy.hyperpods.utils.miuiStrongToast.data.TextParams
+import moe.chenxy.hyperpods.utils.SystemApisUtils.isHyperOS3
+import moe.chenxy.hyperpods.utils.data.BatteryParams
+import moe.chenxy.hyperpods.utils.data.IconParams
+import moe.chenxy.hyperpods.utils.data.Left
+import moe.chenxy.hyperpods.utils.data.Right
+import moe.chenxy.hyperpods.utils.data.StrongToastBean
+import moe.chenxy.hyperpods.utils.data.TextParams
+import androidx.core.graphics.toColorInt
 
 @SuppressLint("WrongConstant")
 object MiuiStrongToastUtil {
     var lastPodsTimestamp = -1L
+    val colorGreen = "#FF34C759".toColorInt()
+    val colorRed = "#FFFF3B30".toColorInt()
+
     fun showStringToast(context: Context, text: String?, colorType: Int) {
         if (!isHyperOS) {
             Handler(Looper.getMainLooper()).post {
@@ -41,9 +46,9 @@ object MiuiStrongToastUtil {
             val left = Left(textParams = textParams)
             val iconParams = IconParams(Category.DRAWABLE, FileType.SVG, "ic_launcher", 1)
             val right = Right(iconParams = iconParams)
-            val stringToastBean = StringToastBean(left, right)
-            val jsonStr = Json.encodeToString(StringToastBean.serializer(), stringToastBean)
-            val bundle = StringToastBundle.Builder()
+            val strongToastBean = StrongToastBean(left, right)
+            val jsonStr = Json.encodeToString(StrongToastBean.serializer(), strongToastBean)
+            val bundle = DeviceNotificationBundle.Builder()
                 .setPackageName(BuildConfig.APPLICATION_ID)
                 .setStrongToastCategory(StrongToastCategory.TEXT_BITMAP_INTENT)
                 .setTarget(null)
@@ -62,15 +67,16 @@ object MiuiStrongToastUtil {
         if (!isHyperOS) {
             return
         }
-        val caseText = TextParams("$case %", if (caseCharging) Color.GREEN else if (case <= lowBatteryThreshold) Color.RED else Color.WHITE)
+        val caseText = TextParams("$case %", if (caseCharging) colorGreen else if (case <= lowBatteryThreshold) colorRed else Color.WHITE)
         val caseVideo = IconParams(Category.RAW, FileType.MP4, caseMp4Uri.toString(), 1)
         val left = Left(iconParams = caseVideo)
         val right = Right(textParams = caseText)
-        val stringToastBean = StringToastBean(left, right)
-        val jsonStr = Json.encodeToString(StringToastBean.serializer(), stringToastBean)
-        val bundle = StringToastBundle.Builder()
+        val strongToastBean = StrongToastBean(left, right)
+        val jsonStr = Json.encodeToString(StrongToastBean.serializer(), strongToastBean)
+        val bundle = DeviceNotificationBundle.Builder()
             .setPackageName("com.xiaomi.bluetooth")
             .setStrongToastCategory(StrongToastCategory.VIDEO_TEXT)
+            .setNotifyId("headset_wear_notification")
             .setTarget(null)
             .setParam(jsonStr)
             .onCreate()
@@ -105,19 +111,20 @@ object MiuiStrongToastUtil {
         val caseCharging = batteryParams.case!!.isCharging
 
         val leftText =
-            TextParams(if (batteryParams.left!!.isConnected) "$left %" else "", if (leftCharging) Color.GREEN else if (left <= lowBatteryThreshold) Color.RED else Color.WHITE)
+            if (batteryParams.left!!.isConnected) TextParams("$left %", if (leftCharging) colorGreen else if (left <= lowBatteryThreshold) colorRed else Color.WHITE, turnAnim = true) else null
         val leftVideo = IconParams(Category.RAW, FileType.MP4, leftVideoUri.toString(), 1)
         val rightText =
-            TextParams(if (batteryParams.right!!.isConnected) "$right %" else "", if (rightCharging) Color.GREEN else if (right <= lowBatteryThreshold) Color.RED else Color.WHITE)
+            if (batteryParams.right!!.isConnected) TextParams( "$right %", if (rightCharging) colorGreen else if (right <= lowBatteryThreshold) colorRed else Color.WHITE, turnAnim = true) else null
         val rightVideo = IconParams(Category.RAW, FileType.MP4, rightVideoUri.toString(), 1)
         val l = Left(textParams = leftText, iconParams = leftVideo)
         val r = Right(textParams = rightText, iconParams = rightVideo)
-        val stringToastBean = StringToastBean(l, r)
-        val jsonStr = Json.encodeToString(StringToastBean.serializer(), stringToastBean)
-        val bundle = StringToastBundle.Builder()
+        val strongToastBean = StrongToastBean(l, r)
+        val jsonStr = Json.encodeToString(StrongToastBean.serializer(), strongToastBean)
+        val bundle = DeviceNotificationBundle.Builder()
             .setPackageName("com.xiaomi.bluetooth")
             .setStrongToastCategory(StrongToastCategory.VIDEO_TEXT_TEXT_VIDEO)
             .setDuration(7000)
+            .setNotifyId("headset_wear_notification")
             .setTarget(null)
             .setParam(jsonStr)
             .onCreate()
@@ -145,7 +152,7 @@ object MiuiStrongToastUtil {
     }
 
     fun showPodsBatteryToastByMiuiBt(
-        context: Context,
+        context: Context?,
         batteryParams: BatteryParams
     ) {
         val intent = Intent("chen.action.hyperpods.sendstrongtoast")
@@ -154,11 +161,11 @@ object MiuiStrongToastUtil {
 
         intent.`package` = "com.xiaomi.bluetooth"
 
-        context.sendBroadcast(intent)
+        context?.sendBroadcast(intent)
     }
 
     fun showPodsNotificationByMiuiBt(
-        context: Context,
+        context: Context?,
         batteryParams: BatteryParams,
         device: BluetoothDevice,
     ) {
@@ -169,7 +176,7 @@ object MiuiStrongToastUtil {
 
         intent.`package` = "com.xiaomi.bluetooth"
 
-        context.sendBroadcast(intent)
+        context?.sendBroadcast(intent)
     }
 
     fun cancelPodsNotificationByMiuiBt(
@@ -182,6 +189,13 @@ object MiuiStrongToastUtil {
 
         intent.`package` = "com.xiaomi.bluetooth"
 
+        context.sendBroadcast(intent)
+    }
+
+    fun showPodConnectingByMiuiBt(context: Context, device: BluetoothDevice) {
+        val intent = Intent("chen.action.hyperpods.podconnecting")
+        intent.putExtra("device", device)
+        intent.`package` = "com.xiaomi.bluetooth"
         context.sendBroadcast(intent)
     }
 
