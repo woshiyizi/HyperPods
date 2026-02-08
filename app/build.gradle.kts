@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.agp.app)
+    alias(libs.plugins.kotlin)
     alias(libs.plugins.ksp)
     alias(libs.plugins.lsplugin.apksign)
     alias(libs.plugins.lsplugin.resopt)
@@ -63,9 +64,7 @@ android {
         }
     }
 
-    kotlin {
-        jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
-    }
+   
 
     buildFeatures {
         buildConfig = true
@@ -95,6 +94,9 @@ android {
     }
 }
 
+ kotlin {
+        jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
+    }
 configurations.configureEach {
 //    exclude(group = "androidx.appcompat", module = "appcompat")
     exclude(group = "androidx.lifecycle", module = "lifecycle-viewmodel-ktx")
