@@ -114,12 +114,12 @@ dependencies {
     implementation(libs.androidx.activity.compose)
 
     // ✅ 修改：使用 compose.dependencies.xxx (官方推荐写法，解决警告和引用问题)
-    implementation(compose.dependencies.runtime)
-    implementation(compose.dependencies.foundation)
-    implementation(compose.dependencies.ui)
-    implementation(compose.dependencies.components.resources)
-    implementation(compose.dependencies.preview)
-    debugImplementation(compose.dependencies.uiTooling)
+    implementation(libs.compose.runtime)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.components.resources)
+    implementation(libs.compose.preview)
+    debugImplementation(libs.compose.ui.tooling)
     
     implementation(libs.haze)
 }
