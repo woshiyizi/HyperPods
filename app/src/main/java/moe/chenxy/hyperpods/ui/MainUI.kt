@@ -307,7 +307,7 @@ fun AppHorizontalPager(
 ) {
     HorizontalPager(
         modifier = modifier,
-        pagerState = pagerState,
+        state = pagerState,
         pageContent = { page ->
             when (page) {
                 0 -> Crossfade(canShowDetailPage, label = "MainUIShowDetailAnim") { value ->
