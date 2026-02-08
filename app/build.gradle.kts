@@ -5,7 +5,10 @@ plugins {
     alias(libs.plugins.lsplugin.apksign)
     alias(libs.plugins.lsplugin.resopt)
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.parcelize)
+    
+    // ✅ 修改：直接使用 ID，不带版本号，让它自动跟随 Kotlin 版本
+    id("kotlin-parcelize")
+    
     alias(libs.plugins.compose.compiler)
 }
 
