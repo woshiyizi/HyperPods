@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import moe.chenxy.hyperpods.R
 import moe.chenxy.hyperpods.pods.NoiseControlMode
 import moe.chenxy.hyperpods.ui.components.AncSwitch
@@ -38,9 +39,10 @@ fun PodDetailPage(
     onAncModeChange: (NoiseControlMode) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier.height(getWindowSize().height.dp),
-        contentPadding = PaddingValues(top = padding.calculateTopPadding()),
-        topAppBarScrollBehavior = topAppBarScrollBehavior
+        modifier = Modifier
+            .height(getWindowSize().height.dp)
+            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
+        contentPadding = PaddingValues(top = padding.calculateTopPadding())
     ) {
         item {
             Card(
