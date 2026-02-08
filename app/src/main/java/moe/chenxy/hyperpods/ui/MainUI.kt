@@ -52,7 +52,7 @@ import moe.chenxy.hyperpods.utils.miuiStrongToast.data.BatteryParams
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.EarDetectionParams
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.HyperPodsAction
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.HyperPodsPrefsKey
-import top.yukonga.miuix.kmp.basic.HorizontalPager
+import androidx.compose.foundation.pager.HorizontalPager
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationItem
@@ -61,9 +61,9 @@ import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.Info
-import top.yukonga.miuix.kmp.icon.icons.Settings
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Volatile
