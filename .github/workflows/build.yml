@@ -2,7 +2,7 @@ name: Build HyperPods
 
 on:
   push:
-    tags: [  "*" ]
+    tags: [ "*" ]
     branches: [ "main", "aap" ]
   pull_request:
     branches: [ "main", "aap" ]
