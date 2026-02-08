@@ -7,7 +7,6 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.parcelize)
     alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.jetbrains.compose)
 }
 
 apksign {
@@ -66,6 +65,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true // ✅ 确保开启了 Compose 功能
     }
 
     packaging {
@@ -92,15 +92,13 @@ android {
     }
 }
 
-// ✅ 放在 android {} 块外面
 kotlin {
     jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
 }
 
 configurations.configureEach {
-    // exclude(group = "androidx.appcompat", module = "appcompat")
     exclude(group = "androidx.lifecycle", module = "lifecycle-viewmodel-ktx")
-
+    // 保持强制版本，以防万一
     resolutionStrategy {
         force("androidx.core:core:1.15.0")
         force("androidx.core:core-ktx:1.15.0")
@@ -118,13 +116,13 @@ dependencies {
     implementation(libs.yukonga.miuix)
     implementation(libs.androidx.activity.compose)
 
-    // ✅ 修改：使用 compose.dependencies.xxx (官方推荐写法，解决警告和引用问题)
-    implementation(libs.compose.runtime)
-    implementation(libs.compose.foundation)
-    implementation(libs.compose.ui)
-    implementation(libs.compose.components.resources)
-    implementation(libs.compose.preview)
-    debugImplementation(libs.compose.ui.tooling)
+    // ✅ 改用官方 BOM 写法，这能确保 Box, LazyColumn, HorizontalPager 等组件都能找到
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material3) // 即使只用基础组件，也建议加上
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
     
     implementation(libs.haze)
 }
