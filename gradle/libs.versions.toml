@@ -34,13 +34,14 @@ yukonga-miuix = { group = "top.yukonga.miuix.kmp", name = "miuix", version.ref =
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 
-# ⬇️ 新增：标准的 AndroidX Compose 库
+# ⬇️ 标准 AndroidX Compose 库 (BOM)
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
-# 即使你用 MIUIX，通常也需要引入 Material3 以防某些组件依赖它
+# ✅ 新增：布局库 (解决 Box, align 等报错)
+androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+# ✅ 新增：扩展图标库 (解决 Search, Settings, Info 图标报错)
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout" }
-androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
