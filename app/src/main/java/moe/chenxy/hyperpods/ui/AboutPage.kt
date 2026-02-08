@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -56,9 +57,11 @@ fun AboutPage(
 ) {
     val context = LocalContext.current
     LazyColumn(
-        modifier = Modifier.height(getWindowSize().height.dp).padding(12.dp),
-        contentPadding = PaddingValues(top = padding.calculateTopPadding()),
-        topAppBarScrollBehavior = topAppBarScrollBehavior
+        modifier = Modifier
+        .height(getWindowSize().height.dp)
+        .padding(12.dp)
+        .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection), // ✅ 新增：通过 modifier 绑定滚动行为
+    contentPadding = PaddingValues(top = padding.calculateTopPadding())
     ) {
         item {
             Row(modifier = Modifier.fillMaxWidth().padding(12.dp),
