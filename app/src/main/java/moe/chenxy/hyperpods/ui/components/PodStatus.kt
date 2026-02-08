@@ -35,7 +35,6 @@ import moe.chenxy.hyperpods.utils.miuiStrongToast.data.PodParams
 // ✅ 替换为官方 Box
 import androidx.compose.foundation.layout.Box
 // ✅ 新增 Alignment 用于解决 .align() 报错
-import androidx.compose.ui.Alignment
 import top.yukonga.miuix.kmp.basic.Text
 
 fun lerp(start: Float, stop: Float, amount: Float): Float {
