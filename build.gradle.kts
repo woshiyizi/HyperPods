@@ -13,6 +13,5 @@ plugins {
     alias(libs.plugins.lsplugin.apksign) apply false
     alias(libs.plugins.lsplugin.resopt) apply false
     alias(libs.plugins.kotlinSerialization) apply false
-    alias(libs.plugins.parcelize) apply false
     alias(libs.plugins.compose.compiler) apply false
 }
