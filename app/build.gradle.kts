@@ -64,8 +64,6 @@ android {
         }
     }
 
-   
-
     buildFeatures {
         buildConfig = true
     }
@@ -94,11 +92,13 @@ android {
     }
 }
 
- kotlin {
-        jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
-    }
+// ✅ 放在 android {} 块外面
+kotlin {
+    jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
+}
+
 configurations.configureEach {
-//    exclude(group = "androidx.appcompat", module = "appcompat")
+    // exclude(group = "androidx.appcompat", module = "appcompat")
     exclude(group = "androidx.lifecycle", module = "lifecycle-viewmodel-ktx")
 }
 
@@ -108,14 +108,18 @@ dependencies {
     implementation(libs.yukihookApi)
     ksp(libs.yukihookKsp)
     implementation(libs.kotlinx.serialization.json)
+    
     // UI Kits
     implementation(libs.yukonga.miuix)
     implementation(libs.androidx.activity.compose)
-    implementation(compose.runtime)
-    implementation(compose.foundation)
-    implementation(compose.ui)
-    implementation(compose.components.resources)
-    implementation(compose.preview)
-    debugImplementation(compose.uiTooling)
+
+    // ✅ 修改：使用 compose.dependencies.xxx (官方推荐写法，解决警告和引用问题)
+    implementation(compose.dependencies.runtime)
+    implementation(compose.dependencies.foundation)
+    implementation(compose.dependencies.ui)
+    implementation(compose.dependencies.components.resources)
+    implementation(compose.dependencies.preview)
+    debugImplementation(compose.dependencies.uiTooling)
+    
     implementation(libs.haze)
 }
