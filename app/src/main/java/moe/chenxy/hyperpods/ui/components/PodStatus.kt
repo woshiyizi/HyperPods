@@ -32,7 +32,9 @@ import moe.chenxy.hyperpods.pods.EarDetectionStatus
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.BatteryParams
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.EarDetectionParams
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.PodParams
-import top.yukonga.miuix.kmp.basic.Box
+// ✅ 替换为官方 Box
+import androidx.compose.foundation.layout.Box
+// ✅ 新增 Alignment 用于解决 .align() 报错
 import top.yukonga.miuix.kmp.basic.Text
 
 fun lerp(start: Float, stop: Float, amount: Float): Float {

@@ -30,3 +30,5 @@
 -allowaccessmodification
 -overloadaggressively
 -renamesourcefileattribute SourceFile
+-dontwarn java.lang.reflect.AnnotatedType
+-dontwarn java.lang.reflect.**

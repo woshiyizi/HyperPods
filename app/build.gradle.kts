@@ -5,9 +5,11 @@ plugins {
     alias(libs.plugins.lsplugin.apksign)
     alias(libs.plugins.lsplugin.resopt)
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.parcelize)
+    
+    // ✅ 修改：直接使用 ID，不带版本号，让它自动跟随 Kotlin 版本
+    id("kotlin-parcelize")
+    
     alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.jetbrains.compose)
 }
 
 apksign {
@@ -58,18 +60,16 @@ android {
 
     dependenciesInfo.includeInApk = false
 
+    // 这里配置 Java 版本
     java {
         toolchain {
             languageVersion = JavaLanguageVersion.of(JavaVersion.VERSION_22.majorVersion)
         }
     }
 
-    kotlin {
-        jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
-    }
-
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     packaging {
@@ -96,9 +96,19 @@ android {
     }
 }
 
+// Kotlin 工具链配置（与 android.java.toolchain 保持一致）
+kotlin {
+    jvmToolchain(JavaVersion.VERSION_22.majorVersion.toInt())
+}
+
 configurations.configureEach {
-//    exclude(group = "androidx.appcompat", module = "appcompat")
     exclude(group = "androidx.lifecycle", module = "lifecycle-viewmodel-ktx")
+    
+    // 强制锁定版本，解决 AGP 8.8 与 AndroidX Core 的兼容性问题
+    resolutionStrategy {
+        force("androidx.core:core:1.15.0")
+        force("androidx.core:core-ktx:1.15.0")
+    }
 }
 
 dependencies {
@@ -107,14 +117,26 @@ dependencies {
     implementation(libs.yukihookApi)
     ksp(libs.yukihookKsp)
     implementation(libs.kotlinx.serialization.json)
+    
     // UI Kits
     implementation(libs.yukonga.miuix)
     implementation(libs.androidx.activity.compose)
-    implementation(compose.runtime)
-    implementation(compose.foundation)
-    implementation(compose.ui)
-    implementation(compose.components.resources)
-    implementation(compose.preview)
-    debugImplementation(compose.uiTooling)
+
+    // AndroidX Compose (BOM 管理版本)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.foundation)
+    
+    // ✅ 新增：引入布局库，解决 Box, Column, Row 找不到的问题
+    implementation(libs.androidx.compose.foundation.layout)
+    
+    implementation(libs.androidx.compose.material3)
+    
+    // ✅ 新增：引入扩展图标库，解决 Search, Settings 等图标找不到的问题
+    implementation(libs.androidx.compose.material.icons.extended)
+    
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    
     implementation(libs.haze)
 }
