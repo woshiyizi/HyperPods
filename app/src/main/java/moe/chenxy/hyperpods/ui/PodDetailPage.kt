@@ -19,7 +19,7 @@ import moe.chenxy.hyperpods.ui.components.PodStatus
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.BatteryParams
 import moe.chenxy.hyperpods.utils.miuiStrongToast.data.EarDetectionParams
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.LazyColumn
+import androidx.compose.foundation.lazy.LazyColumn
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.utils.getWindowSize
