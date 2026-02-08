@@ -97,8 +97,8 @@ fun MainUI() {
     }
 
     val items = listOf(
-        NavigationItem(stringResource(R.string.pod_info), MiuixIcons.Settings),
-        NavigationItem(stringResource(R.string.about), MiuixIcons.Info),
+        NavigationItem(stringResource(R.string.pod_info), Icons.Outlined.Settings),
+        NavigationItem(stringResource(R.string.about), Icons.Outlined.Info),
     )
 
     LaunchedEffect(pagerState) {
